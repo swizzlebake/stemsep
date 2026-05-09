@@ -1,0 +1,30 @@
+#pragma once
+#include <juce_gui_basics/juce_gui_basics.h>
+#include "PluginProcessor.h"
+#include "UI/FrequencyDisplay.h"
+#include "UI/StemStrip.h"
+#include <array>
+#include <memory>
+
+class StimSepEditor : public juce::AudioProcessorEditor
+{
+public:
+    explicit StimSepEditor(StimSepProcessor&);
+    ~StimSepEditor() override = default;
+
+    void paint(juce::Graphics& g) override;
+    void resized() override;
+
+private:
+    StimSepProcessor& processor_;
+
+    FrequencyDisplay freqDisplay_;
+    std::array<std::unique_ptr<StemStrip>, NUM_STEMS> stemStrips_;
+
+    static constexpr int editorWidth   = 800;
+    static constexpr int editorHeight  = 600;
+    static constexpr int displayHeight = 300;
+    static constexpr int stripHeight   = 75;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StimSepEditor)
+};

@@ -1,0 +1,15 @@
+Builds/
+build/
+.vs/
+*.user
+*.suo
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+_deps/
+*.vst3
+*.dll
+*.exp
+*.lib
+*.pdb
+*.ilk
