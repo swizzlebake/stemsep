@@ -31,8 +31,10 @@ target_sources(StemSep PRIVATE
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
     Source/DSP/BandFilter.cpp
+    Source/DSP/DemucsRunner.cpp
     Source/UI/FrequencyDisplay.cpp
     Source/UI/StemStrip.cpp
+    Source/UI/SeparationPanel.cpp
 )
 
 target_include_directories(StemSep PRIVATE Source)
@@ -47,6 +49,7 @@ target_compile_definitions(StemSep PUBLIC
 target_link_libraries(StemSep PRIVATE
     juce::juce_audio_utils
     juce::juce_audio_processors
+    juce::juce_audio_formats
     juce::juce_dsp
     juce::juce_graphics
     juce::juce_gui_basics
@@ -73,10 +76,12 @@ target_sources(StemSepTests PRIVATE
     Tests/BandFilterTests.cpp
     Tests/PluginProcessorTests.cpp
     Source/DSP/BandFilter.cpp
+    Source/DSP/DemucsRunner.cpp
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
     Source/UI/FrequencyDisplay.cpp
     Source/UI/StemStrip.cpp
+    Source/UI/SeparationPanel.cpp
 )
 
 target_include_directories(StemSepTests PRIVATE Source)
@@ -92,6 +97,7 @@ target_link_libraries(StemSepTests PRIVATE
     Catch2::Catch2
     juce::juce_audio_utils
     juce::juce_audio_processors
+    juce::juce_audio_formats
     juce::juce_dsp
     juce::juce_graphics
     juce::juce_gui_basics

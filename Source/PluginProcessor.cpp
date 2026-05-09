@@ -1,8 +1,12 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include <cmath>
 
 static const char* kStemNames[NUM_STEMS] = {
     "Drums", "Bass", "Guitar", "Vocals", "Other"
+};
+static const char* kStemFiles[NUM_STEMS] = {
+    "drums.wav", "bass.wav", "guitar.wav", "vocals.wav", "other.wav"
 };
 
 static const float kDefaultFreq[NUM_STEMS] = { 120.f, 250.f, 1500.f, 4000.f, 12000.f };
@@ -15,6 +19,8 @@ StemSepProcessor::StemSepProcessor()
             .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "PARAMS", createParameterLayout())
 {
+    formatManager_.registerBasicFormats();
+
     for (int i = 0; i < NUM_STEMS; ++i)
     {
         const auto id = juce::String(i);
@@ -87,6 +93,42 @@ void StemSepProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     juce::ScopedNoDenormals noDenormals;
     const int numSamples = buffer.getNumSamples();
 
+    auto outputBuf = getBusBuffer(buffer, false, 0);
+    float* outL = outputBuf.getWritePointer(0);
+    float* outR = outputBuf.getWritePointer(1);
+
+    // Demucs playback mode
+    if (mode_.load(std::memory_order_acquire) == Mode::Demucs
+        && separatedAudioReady_.load(std::memory_order_acquire))
+    {
+        int64_t startSample = 0;
+        if (auto* ph = getPlayHead())
+            if (auto pos = ph->getPosition())
+                if (auto t = pos->getTimeInSamples())
+                    startSample = *t;
+
+        outputBuf.clear();
+        for (int i = 0; i < NUM_STEMS; ++i)
+        {
+            if (enableParams[i]->load() < 0.5f)
+                continue;
+
+            const float gainLin = std::pow(10.f, gainParams[i]->load() / 20.f);
+            const auto& stem    = separatedStems_[i];
+            const int   stemLen = stem.getNumSamples();
+
+            for (int n = 0; n < numSamples; ++n)
+            {
+                const int64_t idx = startSample + n;
+                if (idx < 0 || idx >= stemLen) continue;
+                outL[n] += stem.getSample(0, (int)idx) * gainLin;
+                outR[n] += stem.getSample(stem.getNumChannels() > 1 ? 1 : 0, (int)idx) * gainLin;
+            }
+        }
+        return;
+    }
+
+    // BPF mode
     // Copy input before clearing output — they share the same channels in in-place mode.
     auto inputBuf = getBusBuffer(buffer, true, 0);
     inputCopy_.setSize(2, numSamples, false, false, true);
@@ -98,10 +140,7 @@ void StemSepProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     const float* inL = inputCopy_.getReadPointer(0);
     const float* inR = inputCopy_.getReadPointer(1);
 
-    auto outputBuf = getBusBuffer(buffer, false, 0);
     outputBuf.clear();
-    float* outL = outputBuf.getWritePointer(0);
-    float* outR = outputBuf.getWritePointer(1);
 
     for (int i = 0; i < NUM_STEMS; ++i)
     {
@@ -117,9 +156,57 @@ void StemSepProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     }
 }
 
+void StemSepProcessor::loadSeparatedStems(const juce::File& folder)
+{
+    separatedAudioReady_.store(false, std::memory_order_release);
+    separatedSourcePath_ = folder.getFullPathName();
+
+    const double hostSR = getSampleRate() > 0.0 ? getSampleRate() : 44100.0;
+
+    for (int i = 0; i < NUM_STEMS; ++i)
+    {
+        const auto wavFile = folder.getChildFile(kStemFiles[i]);
+        std::unique_ptr<juce::AudioFormatReader> reader(
+            formatManager_.createReaderFor(wavFile));
+
+        if (reader == nullptr)
+        {
+            separatedStems_[i].setSize(2, 0);
+            continue;
+        }
+
+        const auto numSamples = (int)reader->lengthInSamples;
+        separatedStems_[i].setSize(2, numSamples, false, true, false);
+        reader->read(&separatedStems_[i], 0, numSamples, 0, true, true);
+
+        // Resample once if host SR differs from file SR
+        if (std::abs(reader->sampleRate - hostSR) > 0.5)
+        {
+            const double speedRatio = reader->sampleRate / hostSR;
+            const int newLen = juce::roundToInt(numSamples / speedRatio);
+            juce::AudioBuffer<float> resampled(2, newLen);
+            resampled.clear();
+
+            for (int ch = 0; ch < 2; ++ch)
+            {
+                juce::LagrangeInterpolator interp;
+                interp.process(speedRatio,
+                               separatedStems_[i].getReadPointer(ch),
+                               resampled.getWritePointer(ch),
+                               newLen);
+            }
+            separatedStems_[i] = std::move(resampled);
+        }
+    }
+
+    separatedAudioReady_.store(true, std::memory_order_release);
+}
+
 void StemSepProcessor::getStateInformation(juce::MemoryBlock& dest)
 {
     auto state = apvts.copyState();
+    state.setProperty("mode",       (int)mode_.load(), nullptr);
+    state.setProperty("sourceFile", separatedSourcePath_, nullptr);
     std::unique_ptr<juce::XmlElement> xml(state.createXml());
     copyXmlToBinary(*xml, dest);
 }
@@ -127,8 +214,21 @@ void StemSepProcessor::getStateInformation(juce::MemoryBlock& dest)
 void StemSepProcessor::setStateInformation(const void* data, int sizeInBytes)
 {
     std::unique_ptr<juce::XmlElement> xml(getXmlFromBinary(data, sizeInBytes));
-    if (xml != nullptr && xml->hasTagName(apvts.state.getType()))
-        apvts.replaceState(juce::ValueTree::fromXml(*xml));
+    if (xml == nullptr || !xml->hasTagName(apvts.state.getType()))
+        return;
+
+    auto state = juce::ValueTree::fromXml(*xml);
+    apvts.replaceState(state);
+
+    mode_.store((Mode)(int)state.getProperty("mode", 0), std::memory_order_release);
+    separatedSourcePath_ = state.getProperty("sourceFile", "").toString();
+
+    if (separatedSourcePath_.isNotEmpty())
+    {
+        const juce::File folder(separatedSourcePath_);
+        if (folder.isDirectory())
+            loadSeparatedStems(folder);
+    }
 }
 
 void StemSepProcessor::getMagnitudeResponses(

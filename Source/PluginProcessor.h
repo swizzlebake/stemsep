@@ -1,7 +1,9 @@
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_audio_formats/juce_audio_formats.h>
 #include "DSP/BandFilter.h"
 #include <array>
+#include <atomic>
 #include <vector>
 
 static constexpr int NUM_STEMS = 5;
@@ -9,6 +11,8 @@ static constexpr int NUM_STEMS = 5;
 class StemSepProcessor : public juce::AudioProcessor
 {
 public:
+    enum class Mode { BPF, Demucs };
+
     StemSepProcessor();
     ~StemSepProcessor() override = default;
 
@@ -40,6 +44,11 @@ public:
 
     void refreshCoefficients();
 
+    Mode getMode() const                { return mode_.load(std::memory_order_acquire); }
+    void setMode(Mode m)                { mode_.store(m, std::memory_order_release); }
+    bool hasSeparatedAudio() const      { return separatedAudioReady_.load(std::memory_order_acquire); }
+    void loadSeparatedStems(const juce::File& demucsOutputFolder);
+
 private:
     juce::AudioProcessorValueTreeState apvts;
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
@@ -51,9 +60,15 @@ private:
     std::array<std::atomic<float>*, NUM_STEMS> gainParams{};
     std::array<std::atomic<float>*, NUM_STEMS> enableParams{};
 
-    // Pre-allocated input copy: stereo in/out share channels, so we must
-    // save the input before clearing the output buffer each block.
+    // BPF mode: pre-allocated input copy (in/out share channels in in-place mode)
     juce::AudioBuffer<float> inputCopy_;
+
+    // Demucs mode
+    std::array<juce::AudioBuffer<float>, NUM_STEMS> separatedStems_;
+    std::atomic<bool>    separatedAudioReady_{ false };
+    std::atomic<Mode>    mode_{ Mode::BPF };
+    juce::AudioFormatManager formatManager_;
+    juce::String         separatedSourcePath_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StemSepProcessor)
 };
