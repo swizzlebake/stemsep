@@ -86,10 +86,11 @@ float BandFilter::getMagnitudeForFrequency(float freqHz, double sampleRate) cons
     const double c2 = std::cos(2.0 * w);
     const double s2 = std::sin(2.0 * w);
 
-    const double numR = b0 + b1 * c1 + b2 * c2;
-    const double numI =    - b1 * s1 - b2 * s2;
-    const double denR = 1.0 + a1 * c1 + a2 * c2;
-    const double denI =     - a1 * s1 - a2 * s2;
+    // Use target coefficients so the visualiser reflects parameter changes immediately.
+    const double numR = tb0 + tb1 * c1 + tb2 * c2;
+    const double numI =     - tb1 * s1 - tb2 * s2;
+    const double denR = 1.0 + ta1 * c1 + ta2 * c2;
+    const double denI =     - ta1 * s1 - ta2 * s2;
 
     const double numMag = std::sqrt(numR * numR + numI * numI);
     const double denMag = std::sqrt(denR * denR + denI * denI);

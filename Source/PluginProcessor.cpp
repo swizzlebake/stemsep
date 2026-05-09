@@ -147,6 +147,15 @@ void StemSepProcessor::getMagnitudeResponses(
     }
 }
 
+void StemSepProcessor::refreshCoefficients()
+{
+    for (int i = 0; i < NUM_STEMS; ++i)
+        filters[i].prepareCoefficients(
+            freqParams[i]->load(),
+            qParams[i]->load(),
+            gainParams[i]->load());
+}
+
 juce::AudioProcessorEditor* StemSepProcessor::createEditor()
 {
     return new StemSepEditor(*this);

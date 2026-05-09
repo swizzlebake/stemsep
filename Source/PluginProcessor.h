@@ -38,6 +38,8 @@ public:
     void getMagnitudeResponses(const std::vector<float>& freqPoints,
                                std::array<std::vector<float>, NUM_STEMS>& outMagnitudes) const;
 
+    void refreshCoefficients();
+
 private:
     juce::AudioProcessorValueTreeState apvts;
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();

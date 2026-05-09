@@ -55,3 +55,52 @@ target_link_libraries(StemSep PRIVATE
     juce::juce_recommended_lto_flags
     juce::juce_recommended_warning_flags
 )
+
+# ── Test suite ────────────────────────────────────────────────────────────────
+
+FetchContent_Declare(
+    Catch2
+    GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+    GIT_TAG        v3.7.1
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(Catch2)
+
+juce_add_console_app(StemSepTests PRODUCT_NAME "StemSepTests")
+
+target_sources(StemSepTests PRIVATE
+    Tests/main.cpp
+    Tests/BandFilterTests.cpp
+    Tests/PluginProcessorTests.cpp
+    Source/DSP/BandFilter.cpp
+    Source/PluginProcessor.cpp
+    Source/PluginEditor.cpp
+    Source/UI/FrequencyDisplay.cpp
+    Source/UI/StemStrip.cpp
+)
+
+target_include_directories(StemSepTests PRIVATE Source)
+
+target_compile_definitions(StemSepTests PRIVATE
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0
+    JUCE_DISPLAY_SPLASH_SCREEN=0
+    JUCE_VST3_CAN_REPLACE_VST2=0
+)
+
+target_link_libraries(StemSepTests PRIVATE
+    Catch2::Catch2
+    juce::juce_audio_utils
+    juce::juce_audio_processors
+    juce::juce_dsp
+    juce::juce_graphics
+    juce::juce_gui_basics
+    PUBLIC
+    juce::juce_recommended_config_flags
+    juce::juce_recommended_warning_flags
+)
+
+enable_testing()
+list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
+include(Catch)
+catch_discover_tests(StemSepTests DISCOVERY_MODE PRE_TEST)
