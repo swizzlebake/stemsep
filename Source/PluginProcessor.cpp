@@ -4,7 +4,8 @@
 StemSepProcessor::StemSepProcessor()
     : AudioProcessor(
         BusesProperties()
-            .withInput ("Stem 1", juce::AudioChannelSet::stereo(), true)
+            .withInput ("Input",  juce::AudioChannelSet::stereo(), true)   // main bus — not processed; safety guard against "Main" sidechain routing
+            .withInput ("Stem 1", juce::AudioChannelSet::stereo(), true)   // aux sidechain inputs
             .withInput ("Stem 2", juce::AudioChannelSet::stereo(), false)
             .withInput ("Stem 3", juce::AudioChannelSet::stereo(), false)
             .withInput ("Stem 4", juce::AudioChannelSet::stereo(), false)
@@ -100,7 +101,8 @@ void StemSepProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         if (enableParams[stemIdx]->load() < 0.5f)
             continue;
 
-        const auto* bus = getBus(true, stemIdx);
+        const int busIdx = stemIdx + 1; // bus 0 is the dummy main — stems start at bus 1
+        const auto* bus = getBus(true, busIdx);
         if (bus == nullptr || !bus->isEnabled())
             continue;
 
@@ -109,7 +111,7 @@ void StemSepProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             qParams[stemIdx]->load(),
             gainParams[stemIdx]->load());
 
-        auto inputBuf = getBusBuffer(buffer, true, stemIdx);
+        auto inputBuf = getBusBuffer(buffer, true, busIdx);
         const float* inL = inputBuf.getReadPointer(0);
         const float* inR = inputBuf.getNumChannels() > 1
                                ? inputBuf.getReadPointer(1) : inL;
