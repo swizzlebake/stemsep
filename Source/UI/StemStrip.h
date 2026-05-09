@@ -6,7 +6,7 @@
 class StemStrip : public juce::Component
 {
 public:
-    StemStrip(int stemIndex,
+    StemStrip(int stemIndex, const juce::String& name,
               juce::AudioProcessorValueTreeState& apvts,
               juce::Colour color);
     ~StemStrip() override = default;

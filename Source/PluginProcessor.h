@@ -4,7 +4,7 @@
 #include <array>
 #include <vector>
 
-static constexpr int NUM_STEMS = 4;
+static constexpr int NUM_STEMS = 5;
 
 class StemSepProcessor : public juce::AudioProcessor
 {
@@ -50,6 +50,10 @@ private:
     std::array<std::atomic<float>*, NUM_STEMS> qParams{};
     std::array<std::atomic<float>*, NUM_STEMS> gainParams{};
     std::array<std::atomic<float>*, NUM_STEMS> enableParams{};
+
+    // Pre-allocated input copy: stereo in/out share channels, so we must
+    // save the input before clearing the output buffer each block.
+    juce::AudioBuffer<float> inputCopy_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StemSepProcessor)
 };

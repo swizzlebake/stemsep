@@ -1,14 +1,13 @@
 #include "StemStrip.h"
 
-StemStrip::StemStrip(int stemIndex,
+StemStrip::StemStrip(int stemIndex, const juce::String& name,
                      juce::AudioProcessorValueTreeState& apvts,
                      juce::Colour color)
     : stemIndex_(stemIndex), stemColor_(color)
 {
-    const auto id  = juce::String(stemIndex);
-    const auto num = juce::String(stemIndex + 1);
+    const auto id = juce::String(stemIndex);
 
-    stemLabel_.setText("Stem " + num, juce::dontSendNotification);
+    stemLabel_.setText(name, juce::dontSendNotification);
     stemLabel_.setColour(juce::Label::textColourId, color);
     stemLabel_.setFont(juce::Font(juce::FontOptions().withHeight(13.f).withStyle("Bold")));
     stemLabel_.setJustificationType(juce::Justification::centred);
@@ -36,7 +35,7 @@ StemStrip::StemStrip(int stemIndex,
     gainSlider_.setTextBoxStyle(juce::Slider::TextBoxLeft, false, 56, 20);
     gainSlider_.setColour(juce::Slider::trackColourId, color.withAlpha(0.5f));
     gainSlider_.setColour(juce::Slider::thumbColourId, color);
-    gainSlider_.setTooltip("Peak gain (dB)");
+    gainSlider_.setTooltip("Level (dB)");
     addAndMakeVisible(gainSlider_);
     gainAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "gain" + id, gainSlider_);
@@ -53,11 +52,9 @@ void StemStrip::paint(juce::Graphics& g)
 {
     g.fillAll(juce::Colour(0xff16213e));
 
-    // Coloured left accent bar
     g.setColour(stemColor_);
     g.fillRect(0, 0, 5, getHeight());
 
-    // Subtle separator line at the bottom
     g.setColour(juce::Colours::black.withAlpha(0.4f));
     g.drawHorizontalLine(getHeight() - 1, 0.f, (float)getWidth());
 }

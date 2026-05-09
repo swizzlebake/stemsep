@@ -22,7 +22,7 @@ private:
     std::array<std::unique_ptr<StemStrip>, NUM_STEMS> stemStrips_;
 
     static constexpr int editorWidth   = 800;
-    static constexpr int editorHeight  = 600;
+    static constexpr int editorHeight  = 675;
     static constexpr int displayHeight = 300;
     static constexpr int stripHeight   = 75;
 

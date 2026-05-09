@@ -5,7 +5,7 @@
 
 // ── parameter registration ───────────────────────────────────────────────────
 
-TEST_CASE("StemSepProcessor: all 16 parameters are registered", "[processor]")
+TEST_CASE("StemSepProcessor: all 20 parameters are registered", "[processor]")
 {
     StemSepProcessor p;
     auto& apvts = p.getAPVTS();
@@ -20,96 +20,81 @@ TEST_CASE("StemSepProcessor: all 16 parameters are registered", "[processor]")
     }
 }
 
-TEST_CASE("StemSepProcessor: default parameter values are correct", "[processor]")
+TEST_CASE("StemSepProcessor: default parameter values match instrument defaults", "[processor]")
 {
     StemSepProcessor p;
     auto& apvts = p.getAPVTS();
+
+    // Expected instrument defaults: Drums=120, Bass=250, Guitar=1500, Vocals=4000, Other=12000
+    const float expectedFreq[NUM_STEMS] = { 120.f, 250.f, 1500.f, 4000.f, 12000.f };
+    const float expectedQ[NUM_STEMS]    = { 0.7f,  1.5f,  1.5f,   1.5f,   0.7f   };
 
     for (int i = 0; i < NUM_STEMS; ++i)
     {
         const auto id = juce::String(i);
 
-        // gain default = 0 dB
-        const float gainDefault = apvts.getRawParameterValue("gain" + id)->load();
-        CHECK_THAT(gainDefault, Catch::Matchers::WithinAbs(0.f, 0.01f));
+        const float freq = apvts.getRawParameterValue("freq" + id)->load();
+        CHECK_THAT(freq, Catch::Matchers::WithinRel(expectedFreq[i], 0.02f));
 
-        // freq default = 1000 Hz
-        const float freqDefault = apvts.getRawParameterValue("freq" + id)->load();
-        CHECK_THAT(freqDefault, Catch::Matchers::WithinAbs(1000.f, 1.f));
+        const float q = apvts.getRawParameterValue("q" + id)->load();
+        CHECK_THAT(q, Catch::Matchers::WithinAbs(expectedQ[i], 0.05f));
 
-        // q default = 1.0
-        const float qDefault = apvts.getRawParameterValue("q" + id)->load();
-        CHECK_THAT(qDefault, Catch::Matchers::WithinAbs(1.f, 0.01f));
+        const float gain = apvts.getRawParameterValue("gain" + id)->load();
+        CHECK_THAT(gain, Catch::Matchers::WithinAbs(0.f, 0.01f));
 
-        // enable default = true (1.0)
-        const float enableDefault = apvts.getRawParameterValue("enable" + id)->load();
-        CHECK(enableDefault > 0.5f);
+        CHECK(apvts.getRawParameterValue("enable" + id)->load() > 0.5f);
     }
 }
 
 // ── bus layout ───────────────────────────────────────────────────────────────
 
-TEST_CASE("StemSepProcessor: has 5 input buses and 1 output bus", "[processor]")
+TEST_CASE("StemSepProcessor: has 1 input bus and 1 output bus", "[processor]")
 {
     StemSepProcessor p;
-    CHECK(p.getBusCount(true)  == 5);
+    CHECK(p.getBusCount(true)  == 1);
     CHECK(p.getBusCount(false) == 1);
 }
 
-TEST_CASE("StemSepProcessor: bus 0 is enabled (dummy main); stem buses start disabled", "[processor]")
+TEST_CASE("StemSepProcessor: main input bus is enabled and stereo", "[processor]")
 {
     StemSepProcessor p;
-    CHECK(p.getBus(true, 0) != nullptr);
-    CHECK(p.getBus(true, 0)->isEnabled());
-
-    // Buses 2-4 start disabled by default
-    for (int i = 2; i <= 4; ++i)
-    {
-        const auto* bus = p.getBus(true, i);
-        CHECK(bus != nullptr);
-        CHECK_FALSE(bus->isEnabled());
-    }
+    const auto* bus = p.getBus(true, 0);
+    REQUIRE(bus != nullptr);
+    CHECK(bus->isEnabled());
+    CHECK(bus->getDefaultLayout() == juce::AudioChannelSet::stereo());
 }
 
 TEST_CASE("StemSepProcessor: isBusesLayoutSupported rejects mono output", "[processor]")
 {
     StemSepProcessor p;
     juce::AudioProcessor::BusesLayout layout;
+    layout.inputBuses.add(juce::AudioChannelSet::stereo());
     layout.outputBuses.add(juce::AudioChannelSet::mono());
-    layout.inputBuses.add(juce::AudioChannelSet::stereo()); // bus 0
-    layout.inputBuses.add(juce::AudioChannelSet::stereo()); // bus 1
-    layout.inputBuses.add(juce::AudioChannelSet::disabled());
-    layout.inputBuses.add(juce::AudioChannelSet::disabled());
-    layout.inputBuses.add(juce::AudioChannelSet::disabled());
     CHECK_FALSE(p.isBusesLayoutSupported(layout));
 }
 
-TEST_CASE("StemSepProcessor: isBusesLayoutSupported accepts all-stereo layout", "[processor]")
+TEST_CASE("StemSepProcessor: isBusesLayoutSupported accepts stereo in + stereo out", "[processor]")
 {
     StemSepProcessor p;
     juce::AudioProcessor::BusesLayout layout;
+    layout.inputBuses.add(juce::AudioChannelSet::stereo());
     layout.outputBuses.add(juce::AudioChannelSet::stereo());
-    for (int i = 0; i < 5; ++i)
-        layout.inputBuses.add(juce::AudioChannelSet::stereo());
     CHECK(p.isBusesLayoutSupported(layout));
 }
 
 // ── processBlock behaviour ───────────────────────────────────────────────────
 
-TEST_CASE("StemSepProcessor: silence in gives silence out after prepare", "[processor]")
+TEST_CASE("StemSepProcessor: silence in gives silence out when all stems disabled", "[processor]")
 {
     StemSepProcessor p;
     p.prepareToPlay(44100.0, 512);
 
-    // Disable all stems so no sidechain routing is needed
     for (int i = 0; i < NUM_STEMS; ++i)
         p.getAPVTS().getParameter("enable" + juce::String(i))
             ->setValueNotifyingHost(0.f);
 
-    // processBlock needs a buffer sized for all buses; use the minimum (main bus only)
     juce::AudioBuffer<float> buffer(2, 512);
     buffer.clear();
-
     juce::MidiBuffer midi;
     p.processBlock(buffer, midi);
 
@@ -118,13 +103,48 @@ TEST_CASE("StemSepProcessor: silence in gives silence out after prepare", "[proc
             CHECK_THAT(buffer.getSample(ch, i), Catch::Matchers::WithinAbs(0.f, 1e-6f));
 }
 
+TEST_CASE("StemSepProcessor: single stereo input passes through enabled BPF stems", "[processor]")
+{
+    StemSepProcessor p;
+    p.prepareToPlay(44100.0, 512);
+
+    // Enable only stem 0 (Drums, centre ≈ 120 Hz), set gain to 0 dB
+    for (int i = 1; i < NUM_STEMS; ++i)
+        p.getAPVTS().getParameter("enable" + juce::String(i))
+            ->setValueNotifyingHost(0.f);
+
+    // Fill buffer with a 120 Hz sine (near Drums centre frequency)
+    juce::AudioBuffer<float> buffer(2, 512);
+    const float sr = 44100.f;
+    for (int ch = 0; ch < 2; ++ch)
+        for (int i = 0; i < 512; ++i)
+            buffer.setSample(ch, i, std::sin(2.f * 3.14159265f * 120.f * i / sr));
+
+    juce::MidiBuffer midi;
+    // Settle: two processBlock passes so BPF is at steady state
+    p.processBlock(buffer, midi);
+
+    // Re-fill input for measurement block
+    for (int ch = 0; ch < 2; ++ch)
+        for (int i = 0; i < 512; ++i)
+            buffer.setSample(ch, i, std::sin(2.f * 3.14159265f * 120.f * i / sr));
+
+    p.processBlock(buffer, midi);
+
+    // At 120 Hz (near BPF centre), output should be non-trivial
+    float sumSq = 0.f;
+    for (int i = 0; i < 512; ++i) sumSq += buffer.getSample(0, i) * buffer.getSample(0, i);
+    const float outRms = std::sqrt(sumSq / 512.f);
+    CHECK(outRms > 0.1f);
+}
+
 // ── state serialisation ───────────────────────────────────────────────────────
 
 TEST_CASE("StemSepProcessor: getStateInformation / setStateInformation round-trips", "[processor]")
 {
     StemSepProcessor p;
 
-    // Set non-default values
+    // Set non-default values for two parameters
     p.getAPVTS().getParameter("freq0")->setValueNotifyingHost(
         p.getAPVTS().getParameter("freq0")->convertTo0to1(500.f));
     p.getAPVTS().getParameter("gain1")->setValueNotifyingHost(
@@ -133,7 +153,6 @@ TEST_CASE("StemSepProcessor: getStateInformation / setStateInformation round-tri
     juce::MemoryBlock block;
     p.getStateInformation(block);
 
-    // Create a fresh instance and restore
     StemSepProcessor p2;
     p2.setStateInformation(block.getData(), (int)block.getSize());
 
@@ -167,19 +186,24 @@ TEST_CASE("StemSepProcessor: getMagnitudeResponses returns finite values for all
     }
 }
 
-TEST_CASE("StemSepProcessor: getMagnitudeResponses at 0 dB gain returns ~1 at all points", "[processor]")
+TEST_CASE("StemSepProcessor: getMagnitudeResponses peaks near each stem's centre frequency", "[processor]")
 {
     StemSepProcessor p;
     p.prepareToPlay(44100.0, 512);
 
-    // All gains default to 0 dB
-    const std::vector<float> freqPoints = { 200.f, 1000.f, 5000.f };
-    std::array<std::vector<float>, NUM_STEMS> mags;
-    p.getMagnitudeResponses(freqPoints, mags);
+    // Expected centres from kDefaultFreq: 120, 250, 1500, 4000, 12000 Hz
+    const float centres[NUM_STEMS] = { 120.f, 250.f, 1500.f, 4000.f, 12000.f };
 
     for (int s = 0; s < NUM_STEMS; ++s)
-        for (float m : mags[s])
-            CHECK_THAT(m, Catch::Matchers::WithinAbs(1.f, 0.002f));
+    {
+        p.refreshCoefficients();
+        const std::vector<float> pts = { centres[s] };
+        std::array<std::vector<float>, NUM_STEMS> mags;
+        p.getMagnitudeResponses(pts, mags);
+
+        // At centre frequency with 0 dB gain, BPF magnitude ≈ 1.0
+        CHECK_THAT(mags[s][0], Catch::Matchers::WithinAbs(1.f, 0.02f));
+    }
 }
 
 TEST_CASE("StemSepProcessor: getMagnitudeResponses reflects a gain change", "[processor]")
@@ -190,15 +214,14 @@ TEST_CASE("StemSepProcessor: getMagnitudeResponses reflects a gain change", "[pr
     p.getAPVTS().getParameter("freq0")->setValueNotifyingHost(
         p.getAPVTS().getParameter("freq0")->convertTo0to1(1000.f));
     p.getAPVTS().getParameter("gain0")->setValueNotifyingHost(
-        p.getAPVTS().getParameter("gain0")->convertTo0to1(12.f));
+        p.getAPVTS().getParameter("gain0")->convertTo0to1(6.f));
 
-    // Push parameters into the filter objects (normally done inside processBlock)
     p.refreshCoefficients();
 
     const std::vector<float> freqPoints = { 1000.f };
     std::array<std::vector<float>, NUM_STEMS> mags;
     p.getMagnitudeResponses(freqPoints, mags);
 
-    const float expected = std::pow(10.f, 12.f / 20.f);
+    const float expected = std::pow(10.f, 6.f / 20.f); // ≈ 2.0
     CHECK_THAT(mags[0][0], Catch::Matchers::WithinRel(expected, 0.05f));
 }

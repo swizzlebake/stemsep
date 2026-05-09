@@ -1,15 +1,18 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
+static const char* kStemNames[NUM_STEMS] = {
+    "Drums", "Bass", "Guitar", "Vocals", "Other"
+};
+
+static const float kDefaultFreq[NUM_STEMS] = { 120.f, 250.f, 1500.f, 4000.f, 12000.f };
+static const float kDefaultQ[NUM_STEMS]    = { 0.7f,  1.5f,  1.5f,   1.5f,   0.7f   };
+
 StemSepProcessor::StemSepProcessor()
     : AudioProcessor(
         BusesProperties()
-            .withInput ("Input",  juce::AudioChannelSet::stereo(), true)   // main bus — not processed; safety guard against "Main" sidechain routing
-            .withInput ("Stem 1", juce::AudioChannelSet::stereo(), true)   // aux sidechain inputs
-            .withInput ("Stem 2", juce::AudioChannelSet::stereo(), false)
-            .withInput ("Stem 3", juce::AudioChannelSet::stereo(), false)
-            .withInput ("Stem 4", juce::AudioChannelSet::stereo(), false)
-            .withOutput("Output",  juce::AudioChannelSet::stereo(), true)),
+            .withInput ("Input",  juce::AudioChannelSet::stereo(), true)
+            .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "PARAMS", createParameterLayout())
 {
     for (int i = 0; i < NUM_STEMS; ++i)
@@ -29,30 +32,30 @@ StemSepProcessor::createParameterLayout()
 
     for (int i = 0; i < NUM_STEMS; ++i)
     {
-        const auto id  = juce::String(i);
-        const auto num = juce::String(i + 1);
+        const auto id   = juce::String(i);
+        const auto name = juce::String(kStemNames[i]);
 
         layout.add(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID{"freq" + id, 1},
-            "Stem " + num + " Freq",
+            name + " Freq",
             juce::NormalisableRange<float>(20.f, 20000.f, 0.f, 0.25f),
-            1000.f));
+            kDefaultFreq[i]));
 
         layout.add(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID{"q" + id, 1},
-            "Stem " + num + " Q",
+            name + " Q",
             juce::NormalisableRange<float>(0.1f, 10.f, 0.f, 0.5f),
-            1.0f));
+            kDefaultQ[i]));
 
         layout.add(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID{"gain" + id, 1},
-            "Stem " + num + " Gain",
+            name + " Level",
             juce::NormalisableRange<float>(-48.f, 24.f),
             0.f));
 
         layout.add(std::make_unique<juce::AudioParameterBool>(
             juce::ParameterID{"enable" + id, 1},
-            "Stem " + num + " Enable",
+            name + " Enable",
             true));
     }
 
@@ -63,6 +66,7 @@ void StemSepProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     for (auto& f : filters)
         f.prepare(sampleRate, samplesPerBlock);
+    inputCopy_.setSize(2, samplesPerBlock, false, true, false);
 }
 
 void StemSepProcessor::releaseResources()
@@ -73,16 +77,8 @@ void StemSepProcessor::releaseResources()
 
 bool StemSepProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
 {
-    if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
-        return false;
-
-    for (const auto& bus : layouts.inputBuses)
-    {
-        if (bus != juce::AudioChannelSet::stereo() &&
-            bus != juce::AudioChannelSet::disabled())
-            return false;
-    }
-    return true;
+    return layouts.getMainOutputChannelSet() == juce::AudioChannelSet::stereo()
+        && layouts.getMainInputChannelSet()  == juce::AudioChannelSet::stereo();
 }
 
 void StemSepProcessor::processBlock(juce::AudioBuffer<float>& buffer,
@@ -91,32 +87,33 @@ void StemSepProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     juce::ScopedNoDenormals noDenormals;
     const int numSamples = buffer.getNumSamples();
 
+    // Copy input before clearing output — they share the same channels in in-place mode.
+    auto inputBuf = getBusBuffer(buffer, true, 0);
+    inputCopy_.setSize(2, numSamples, false, false, true);
+    inputCopy_.copyFrom(0, 0, inputBuf, 0, 0, numSamples);
+    if (inputBuf.getNumChannels() > 1)
+        inputCopy_.copyFrom(1, 0, inputBuf, 1, 0, numSamples);
+    else
+        inputCopy_.copyFrom(1, 0, inputBuf, 0, 0, numSamples);
+    const float* inL = inputCopy_.getReadPointer(0);
+    const float* inR = inputCopy_.getReadPointer(1);
+
     auto outputBuf = getBusBuffer(buffer, false, 0);
     outputBuf.clear();
     float* outL = outputBuf.getWritePointer(0);
     float* outR = outputBuf.getWritePointer(1);
 
-    for (int stemIdx = 0; stemIdx < NUM_STEMS; ++stemIdx)
+    for (int i = 0; i < NUM_STEMS; ++i)
     {
-        if (enableParams[stemIdx]->load() < 0.5f)
+        if (enableParams[i]->load() < 0.5f)
             continue;
 
-        const int busIdx = stemIdx + 1; // bus 0 is the dummy main — stems start at bus 1
-        const auto* bus = getBus(true, busIdx);
-        if (bus == nullptr || !bus->isEnabled())
-            continue;
+        filters[i].prepareCoefficients(
+            freqParams[i]->load(),
+            qParams[i]->load(),
+            gainParams[i]->load());
 
-        filters[stemIdx].prepareCoefficients(
-            freqParams[stemIdx]->load(),
-            qParams[stemIdx]->load(),
-            gainParams[stemIdx]->load());
-
-        auto inputBuf = getBusBuffer(buffer, true, busIdx);
-        const float* inL = inputBuf.getReadPointer(0);
-        const float* inR = inputBuf.getNumChannels() > 1
-                               ? inputBuf.getReadPointer(1) : inL;
-
-        filters[stemIdx].processBlock(inL, inR, outL, outR, numSamples);
+        filters[i].processBlock(inL, inR, outL, outR, numSamples);
     }
 }
 

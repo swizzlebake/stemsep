@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\18\\\\Community\\\\Common7\\\\IDE\\\\CommonExtensions\\\\Microsoft\\\\CMake\\\\CMake\\\\bin\\\\cmake.exe\" --build Builds --config Release)",
+      "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\18\\\\Community\\\\Common7\\\\IDE\\\\CommonExtensions\\\\Microsoft\\\\CMake\\\\CMake\\\\bin\\\\cmake.exe\" --build Builds --config Release --target StemSepTests)",
+      "Bash(C:\\\\Users\\\\Lasse\\\\Documents\\\\StimSep\\\\Builds\\\\StemSepTests_artefacts\\\\Release\\\\StemSepTests.exe *)",
+      "Bash(\"C:\\\\Users\\\\Lasse\\\\Documents\\\\StimSep\\\\Builds\\\\StemSepTests_artefacts\\\\Release\\\\StemSepTests.exe\")"
+    ]
+  }
+}
