@@ -7,7 +7,7 @@ StimSep is a VST3 plugin that acts as a spectral stem mixer. A single plugin ins
 
 ## Tech Stack
 - **Framework**: JUCE 8 (via CMake `FetchContent`)
-- **Build**: CMake 3.22+, Visual Studio 2022 (x64)
+- **Build**: CMake 4.2 + Visual Studio 2026 (x64) — generator: `"Visual Studio 18 2026"`
 - **Format**: VST3 only, Windows
 - **Language**: C++17
 - **Testing DAW**: Ableton Live 12 Suite
@@ -131,8 +131,8 @@ magnitude = |H|   // return as float
 ## Building
 
 ```bat
-cmake -B Builds -G "Visual Studio 17 2022" -A x64
-cmake --build Builds --config Release
+"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -B Builds -G "Visual Studio 18 2026" -A x64
+"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" --build Builds --config Release
 ```
 
 Output: `Builds\StimSep_artefacts\Release\VST3\StimSep.vst3`
