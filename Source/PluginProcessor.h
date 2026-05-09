@@ -6,11 +6,11 @@
 
 static constexpr int NUM_STEMS = 4;
 
-class StimSepProcessor : public juce::AudioProcessor
+class StemSepProcessor : public juce::AudioProcessor
 {
 public:
-    StimSepProcessor();
-    ~StimSepProcessor() override = default;
+    StemSepProcessor();
+    ~StemSepProcessor() override = default;
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
@@ -21,7 +21,7 @@ public:
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
 
-    const juce::String getName() const override { return "StimSep"; }
+    const juce::String getName() const override { return "StemSep"; }
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
     double getTailLengthSeconds() const override { return 0.0; }
@@ -49,5 +49,5 @@ private:
     std::array<std::atomic<float>*, NUM_STEMS> gainParams{};
     std::array<std::atomic<float>*, NUM_STEMS> enableParams{};
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StimSepProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StemSepProcessor)
 };

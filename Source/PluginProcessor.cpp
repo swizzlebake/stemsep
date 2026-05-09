@@ -1,7 +1,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
-StimSepProcessor::StimSepProcessor()
+StemSepProcessor::StemSepProcessor()
     : AudioProcessor(
         BusesProperties()
             .withInput ("Stem 1", juce::AudioChannelSet::stereo(), true)
@@ -22,7 +22,7 @@ StimSepProcessor::StimSepProcessor()
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout
-StimSepProcessor::createParameterLayout()
+StemSepProcessor::createParameterLayout()
 {
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
 
@@ -58,19 +58,19 @@ StimSepProcessor::createParameterLayout()
     return layout;
 }
 
-void StimSepProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
+void StemSepProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     for (auto& f : filters)
         f.prepare(sampleRate, samplesPerBlock);
 }
 
-void StimSepProcessor::releaseResources()
+void StemSepProcessor::releaseResources()
 {
     for (auto& f : filters)
         f.reset();
 }
 
-bool StimSepProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
+bool StemSepProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
 {
     if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
         return false;
@@ -84,7 +84,7 @@ bool StimSepProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
     return true;
 }
 
-void StimSepProcessor::processBlock(juce::AudioBuffer<float>& buffer,
+void StemSepProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                                     juce::MidiBuffer&)
 {
     juce::ScopedNoDenormals noDenormals;
@@ -118,21 +118,21 @@ void StimSepProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     }
 }
 
-void StimSepProcessor::getStateInformation(juce::MemoryBlock& dest)
+void StemSepProcessor::getStateInformation(juce::MemoryBlock& dest)
 {
     auto state = apvts.copyState();
     std::unique_ptr<juce::XmlElement> xml(state.createXml());
     copyXmlToBinary(*xml, dest);
 }
 
-void StimSepProcessor::setStateInformation(const void* data, int sizeInBytes)
+void StemSepProcessor::setStateInformation(const void* data, int sizeInBytes)
 {
     std::unique_ptr<juce::XmlElement> xml(getXmlFromBinary(data, sizeInBytes));
     if (xml != nullptr && xml->hasTagName(apvts.state.getType()))
         apvts.replaceState(juce::ValueTree::fromXml(*xml));
 }
 
-void StimSepProcessor::getMagnitudeResponses(
+void StemSepProcessor::getMagnitudeResponses(
     const std::vector<float>& freqPoints,
     std::array<std::vector<float>, NUM_STEMS>& outMagnitudes) const
 {
@@ -145,12 +145,12 @@ void StimSepProcessor::getMagnitudeResponses(
     }
 }
 
-juce::AudioProcessorEditor* StimSepProcessor::createEditor()
+juce::AudioProcessorEditor* StemSepProcessor::createEditor()
 {
-    return new StimSepEditor(*this);
+    return new StemSepEditor(*this);
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
-    return new StimSepProcessor();
+    return new StemSepProcessor();
 }

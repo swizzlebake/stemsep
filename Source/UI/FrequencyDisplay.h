@@ -8,7 +8,7 @@ class FrequencyDisplay : public juce::Component,
                          private juce::Timer
 {
 public:
-    explicit FrequencyDisplay(StimSepProcessor& processor);
+    explicit FrequencyDisplay(StemSepProcessor& processor);
     ~FrequencyDisplay() override;
 
     void paint(juce::Graphics& g) override;
@@ -26,7 +26,7 @@ private:
     float freqToX(float freqHz) const;
     float dBToY(float dB) const;
 
-    StimSepProcessor& processor_;
+    StemSepProcessor& processor_;
     std::array<juce::Colour, NUM_STEMS> stemColors_;
 
     std::vector<float> freqPoints_;

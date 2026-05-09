@@ -6,7 +6,7 @@ static constexpr int   NUM_FREQ_POINTS = 512;
 static constexpr float DB_MAX          =  24.f;
 static constexpr float DB_MIN          = -48.f;
 
-FrequencyDisplay::FrequencyDisplay(StimSepProcessor& processor)
+FrequencyDisplay::FrequencyDisplay(StemSepProcessor& processor)
     : processor_(processor)
 {
     const float logMin = std::log10(20.f);

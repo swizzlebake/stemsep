@@ -1,7 +1,7 @@
-# StimSep — VST3 Multi-Stem Band Mixer Plugin
+# StemSep — VST3 Multi-Stem Band Mixer Plugin
 
 ## Context
-StimSep is a VST3 plugin that acts as a spectral stem mixer. A single plugin instance accepts up to 4 stereo audio stems via VST3 auxiliary input buses. Each stem has an independent parametric bell-curve filter (peaking EQ biquad), letting users boost the frequency range of interest and attenuate everything else. All filtered stems sum to one stereo output, giving control over "how much of each track contributes to the overall sound picture" at a given frequency band.
+StemSep is a VST3 plugin that acts as a spectral stem mixer. A single plugin instance accepts up to 4 stereo audio stems via VST3 auxiliary input buses. Each stem has an independent parametric bell-curve filter (peaking EQ biquad), letting users boost the frequency range of interest and attenuate everything else. All filtered stems sum to one stereo output, giving control over "how much of each track contributes to the overall sound picture" at a given frequency band.
 
 ---
 
@@ -16,7 +16,7 @@ StimSep is a VST3 plugin that acts as a spectral stem mixer. A single plugin ins
 
 ## File Structure
 ```
-StimSep/
+StemSep/
 ├── CMakeLists.txt
 ├── PLAN.md
 ├── Source/
@@ -135,7 +135,7 @@ magnitude = |H|   // return as float
 "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" --build Builds --config Release
 ```
 
-Output: `Builds\StimSep_artefacts\Release\VST3\StimSep.vst3`
+Output: `Builds\StemSep_artefacts\Release\VST3\StemSep.vst3`
 
 Install to `C:\Program Files\Common Files\VST3\`, then re-scan in Ableton Live.
 
@@ -144,7 +144,7 @@ Install to `C:\Program Files\Common Files\VST3\`, then re-scan in Ableton Live.
 ## Ableton Live 12 Routing (4 stems → plugin)
 
 1. Create 4 audio tracks, load one stem per track
-2. Create a 5th track — insert StimSep as an audio effect
+2. Create a 5th track — insert StemSep as an audio effect
 3. Stem 1 (main bus): route track 1's output to track 5's input
 4. Stems 2–4 (aux buses): expand the plugin device and set each sidechain input source to the corresponding track
 5. The plugin output is track 5's audio

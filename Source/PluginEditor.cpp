@@ -7,7 +7,7 @@ static const juce::Colour stemColors[NUM_STEMS] = {
     juce::Colour(0xffce93d8),  // lavender
 };
 
-StimSepEditor::StimSepEditor(StimSepProcessor& p)
+StemSepEditor::StemSepEditor(StemSepProcessor& p)
     : AudioProcessorEditor(&p),
       processor_(p),
       freqDisplay_(p)
@@ -24,12 +24,12 @@ StimSepEditor::StimSepEditor(StimSepProcessor& p)
     setResizable(false, false);
 }
 
-void StimSepEditor::paint(juce::Graphics& g)
+void StemSepEditor::paint(juce::Graphics& g)
 {
     g.fillAll(juce::Colour(0xff1a1a2e));
 }
 
-void StimSepEditor::resized()
+void StemSepEditor::resized()
 {
     auto area = getLocalBounds();
     freqDisplay_.setBounds(area.removeFromTop(displayHeight));

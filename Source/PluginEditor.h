@@ -6,17 +6,17 @@
 #include <array>
 #include <memory>
 
-class StimSepEditor : public juce::AudioProcessorEditor
+class StemSepEditor : public juce::AudioProcessorEditor
 {
 public:
-    explicit StimSepEditor(StimSepProcessor&);
-    ~StimSepEditor() override = default;
+    explicit StemSepEditor(StemSepProcessor&);
+    ~StemSepEditor() override = default;
 
     void paint(juce::Graphics& g) override;
     void resized() override;
 
 private:
-    StimSepProcessor& processor_;
+    StemSepProcessor& processor_;
 
     FrequencyDisplay freqDisplay_;
     std::array<std::unique_ptr<StemStrip>, NUM_STEMS> stemStrips_;
@@ -26,5 +26,5 @@ private:
     static constexpr int displayHeight = 300;
     static constexpr int stripHeight   = 75;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StimSepEditor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StemSepEditor)
 };

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(StimSep VERSION 1.0.0)
+project(StemSep VERSION 1.0.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -13,12 +13,12 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(JUCE)
 
-juce_add_plugin(StimSep
-    COMPANY_NAME            "StimSep"
-    PLUGIN_MANUFACTURER_CODE Stim
+juce_add_plugin(StemSep
+    COMPANY_NAME            "StemSep"
+    PLUGIN_MANUFACTURER_CODE Stem
     PLUGIN_CODE             Ssep
     FORMATS                 VST3
-    PRODUCT_NAME            "StimSep"
+    PRODUCT_NAME            "StemSep"
     IS_SYNTH                FALSE
     NEEDS_MIDI_INPUT        FALSE
     NEEDS_MIDI_OUTPUT       FALSE
@@ -27,7 +27,7 @@ juce_add_plugin(StimSep
     VST3_CATEGORIES         "Fx" "EQ"
 )
 
-target_sources(StimSep PRIVATE
+target_sources(StemSep PRIVATE
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
     Source/DSP/BandFilter.cpp
@@ -35,16 +35,16 @@ target_sources(StimSep PRIVATE
     Source/UI/StemStrip.cpp
 )
 
-target_include_directories(StimSep PRIVATE Source)
+target_include_directories(StemSep PRIVATE Source)
 
-target_compile_definitions(StimSep PUBLIC
+target_compile_definitions(StemSep PUBLIC
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     JUCE_VST3_CAN_REPLACE_VST2=0
     JUCE_DISPLAY_SPLASH_SCREEN=0
 )
 
-target_link_libraries(StimSep PRIVATE
+target_link_libraries(StemSep PRIVATE
     juce::juce_audio_utils
     juce::juce_audio_processors
     juce::juce_dsp
