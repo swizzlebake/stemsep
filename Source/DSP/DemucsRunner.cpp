@@ -1,5 +1,43 @@
 #include "DemucsRunner.h"
 
+// Separation script written to temp dir at runtime.
+// Uses soundfile for loading and saving, completely bypassing
+// torchaudio.save() which requires torchcodec in torchaudio 2.6+.
+static const char* kSeparateScript = R"python(
+import sys, os, torch, soundfile as sf
+from demucs.pretrained import get_model
+from demucs.apply import apply_model
+
+input_file, output_dir, model_name = sys.argv[1], sys.argv[2], sys.argv[3]
+
+model = get_model(model_name)
+model.eval()
+
+# Load with soundfile — no torchaudio.load, no codec issues
+data, file_sr = sf.read(input_file, always_2d=True)  # (samples, channels)
+wav = torch.tensor(data.T, dtype=torch.float32)       # (channels, samples)
+if wav.shape[0] == 1:
+    wav = wav.repeat(2, 1)
+
+# Resample to model SR if needed
+if file_sr != model.samplerate:
+    import julius
+    wav = julius.resample_frac(wav, file_sr, model.samplerate)
+
+# Separate (tqdm progress goes to stderr, parsed by the plugin)
+with torch.no_grad():
+    sources = apply_model(model, wav.unsqueeze(0), progress=True)[0]
+
+# Save with soundfile — no torchaudio.save, no torchcodec
+track = os.path.splitext(os.path.basename(input_file))[0]
+out_dir = os.path.join(output_dir, model_name, track)
+os.makedirs(out_dir, exist_ok=True)
+
+for name, source in zip(model.sources, sources):
+    sf.write(os.path.join(out_dir, name + '.wav'),
+             source.T.cpu().numpy(), model.samplerate, subtype='FLOAT')
+)python";
+
 DemucsRunner::DemucsRunner()
     : juce::Thread("DemucsRunner")
 {
@@ -29,10 +67,10 @@ void DemucsRunner::cancel()
 
 void DemucsRunner::run()
 {
-    // Probe — make sure demucs is importable (import check, not --version which requires args)
+    // Probe — make sure demucs + soundfile are importable
     {
         juce::ChildProcess probe;
-        if (!probe.start("python -c \"import demucs\"",
+        if (!probe.start("python -c \"import demucs, soundfile\"",
                          juce::ChildProcess::wantStdErr | juce::ChildProcess::wantStdOut))
         {
             auto cb = onDone_;
@@ -59,23 +97,27 @@ void DemucsRunner::run()
                              .getChildFile("StemSep_demucs");
     tempDir.createDirectory();
 
-    const auto cmd = "python -m demucs -n htdemucs_6s --float32 -o \""
-                     + tempDir.getFullPathName() + "\" \""
-                     + inputFile_.getFullPathName() + "\"";
+    // Write the separator script (soundfile-based, no torchaudio.save)
+    const auto scriptFile = tempDir.getChildFile("stemsep_separate.py");
+    scriptFile.replaceWithText(kSeparateScript);
+
+    const auto cmd = "python \"" + scriptFile.getFullPathName() + "\" \""
+                     + inputFile_.getFullPathName() + "\" \""
+                     + tempDir.getFullPathName() + "\" htdemucs_6s";
 
     juce::ChildProcess proc;
     if (!proc.start(cmd, juce::ChildProcess::wantStdErr | juce::ChildProcess::wantStdOut))
     {
         auto cb = onDone_;
         juce::MessageManager::callAsync([cb]() {
-            cb({ false, {}, "Failed to start Demucs process" });
+            cb({ false, {}, "Failed to start separation process" });
         });
         return;
     }
 
     // Poll output, accumulate everything, and parse tqdm progress lines
-    juce::String lineBuffer;  // incomplete current line, for progress parsing
-    juce::String fullOutput;  // all output retained for error reporting
+    juce::String lineBuffer;
+    juce::String fullOutput;
 
     auto parsePercent = [](const juce::String& line) -> float {
         const int pctPos = line.indexOf("%");
@@ -97,8 +139,8 @@ void DemucsRunner::run()
         {
             buf[bytesRead] = '\0';
             const auto chunk = juce::String::fromUTF8(buf, (int)bytesRead);
-            fullOutput  += chunk;
-            lineBuffer  += chunk;
+            fullOutput += chunk;
+            lineBuffer += chunk;
 
             for (;;)
             {
@@ -131,7 +173,7 @@ void DemucsRunner::run()
 
     proc.waitForProcessToFinish(30000);
 
-    // Drain any remaining output after process exits
+    // Drain any remaining output
     {
         char buf[1024];
         int n;
@@ -142,27 +184,15 @@ void DemucsRunner::run()
         }
     }
 
-    // Always write a log so the full output is inspectable
     tempDir.getChildFile("demucs.log").replaceWithText(fullOutput);
 
     if (proc.getExitCode() != 0)
     {
         juce::String errMsg;
-
-        // Detect known environment issues and give actionable messages
-        if (fullOutput.contains("torchcodec") || fullOutput.contains("TorchCodec"))
-            errMsg = "torchaudio 2.6+ requires torchcodec. "
-                     "Fix: pip install torchcodec  "
-                     "OR: pip install \"torch==2.5.1\" \"torchaudio==2.5.1\" "
-                     "--index-url https://download.pytorch.org/whl/cu124";
-        else
-        {
-            // Fall back to last non-empty output line
-            for (auto& line : juce::StringArray::fromLines(fullOutput))
-                if (line.trim().isNotEmpty()) errMsg = line.trim();
-            if (errMsg.isEmpty())
-                errMsg = "exit code " + juce::String(proc.getExitCode());
-        }
+        for (auto& line : juce::StringArray::fromLines(fullOutput))
+            if (line.trim().isNotEmpty()) errMsg = line.trim();
+        if (errMsg.isEmpty())
+            errMsg = "exit code " + juce::String(proc.getExitCode());
 
         auto cb = onDone_;
         juce::MessageManager::callAsync([cb, errMsg]() {
