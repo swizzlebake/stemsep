@@ -147,14 +147,25 @@ void DemucsRunner::run()
 
     if (proc.getExitCode() != 0)
     {
-        // Surface the last non-empty line as the short error message
-        juce::String lastLine;
-        for (auto& line : juce::StringArray::fromLines(fullOutput))
-            if (line.trim().isNotEmpty()) lastLine = line.trim();
+        juce::String errMsg;
 
-        const auto errMsg = lastLine.isNotEmpty() ? lastLine : "exit code " + juce::String(proc.getExitCode());
+        // Detect known environment issues and give actionable messages
+        if (fullOutput.contains("torchcodec") || fullOutput.contains("TorchCodec"))
+            errMsg = "torchaudio 2.6+ requires torchcodec. "
+                     "Fix: pip install torchcodec  "
+                     "OR: pip install \"torch==2.5.1\" \"torchaudio==2.5.1\" "
+                     "--index-url https://download.pytorch.org/whl/cu124";
+        else
+        {
+            // Fall back to last non-empty output line
+            for (auto& line : juce::StringArray::fromLines(fullOutput))
+                if (line.trim().isNotEmpty()) errMsg = line.trim();
+            if (errMsg.isEmpty())
+                errMsg = "exit code " + juce::String(proc.getExitCode());
+        }
+
         auto cb = onDone_;
-        juce::MessageManager::callAsync([cb, errMsg, fullOutput]() {
+        juce::MessageManager::callAsync([cb, errMsg]() {
             cb({ false, {}, errMsg });
         });
         return;
