@@ -137,7 +137,7 @@ void SeparationPanel::startSeparation()
             else
             {
                 safeThis->statusLabel_.setText(
-                    "Error: " + result.errorMessage.substring(0, 50),
+                    "Error: " + result.errorMessage.substring(0, 120),
                     juce::dontSendNotification);
             }
         });

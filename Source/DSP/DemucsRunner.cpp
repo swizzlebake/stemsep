@@ -73,8 +73,10 @@ void DemucsRunner::run()
         return;
     }
 
-    // Poll output and parse tqdm progress lines
-    juce::String lineBuffer;
+    // Poll output, accumulate everything, and parse tqdm progress lines
+    juce::String lineBuffer;  // incomplete current line, for progress parsing
+    juce::String fullOutput;  // all output retained for error reporting
+
     auto parsePercent = [](const juce::String& line) -> float {
         const int pctPos = line.indexOf("%");
         if (pctPos < 1) return -1.f;
@@ -94,9 +96,10 @@ void DemucsRunner::run()
         if (bytesRead > 0)
         {
             buf[bytesRead] = '\0';
-            lineBuffer += juce::String::fromUTF8(buf, (int)bytesRead);
+            const auto chunk = juce::String::fromUTF8(buf, (int)bytesRead);
+            fullOutput  += chunk;
+            lineBuffer  += chunk;
 
-            // Process complete lines (split on \r or \n)
             for (;;)
             {
                 int sep = lineBuffer.indexOfAnyOf("\r\n");
@@ -127,12 +130,32 @@ void DemucsRunner::run()
     }
 
     proc.waitForProcessToFinish(30000);
+
+    // Drain any remaining output after process exits
+    {
+        char buf[1024];
+        int n;
+        while ((n = (int)proc.readProcessOutput(buf, (juce::uint32)(sizeof(buf) - 1))) > 0)
+        {
+            buf[n] = '\0';
+            fullOutput += juce::String::fromUTF8(buf, n);
+        }
+    }
+
+    // Always write a log so the full output is inspectable
+    tempDir.getChildFile("demucs.log").replaceWithText(fullOutput);
+
     if (proc.getExitCode() != 0)
     {
-        const auto errText = lineBuffer + proc.readAllProcessOutput();
+        // Surface the last non-empty line as the short error message
+        juce::String lastLine;
+        for (auto& line : juce::StringArray::fromLines(fullOutput))
+            if (line.trim().isNotEmpty()) lastLine = line.trim();
+
+        const auto errMsg = lastLine.isNotEmpty() ? lastLine : "exit code " + juce::String(proc.getExitCode());
         auto cb = onDone_;
-        juce::MessageManager::callAsync([cb, errText]() {
-            cb({ false, {}, "Demucs failed:\n" + errText });
+        juce::MessageManager::callAsync([cb, errMsg, fullOutput]() {
+            cb({ false, {}, errMsg });
         });
         return;
     }
