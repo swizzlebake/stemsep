@@ -10,7 +10,7 @@ StemStrip::StemStrip(int stemIndex,
 
     stemLabel_.setText("Stem " + num, juce::dontSendNotification);
     stemLabel_.setColour(juce::Label::textColourId, color);
-    stemLabel_.setFont(juce::Font(13.f, juce::Font::bold));
+    stemLabel_.setFont(juce::Font(juce::FontOptions().withHeight(13.f).withStyle("Bold")));
     stemLabel_.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(stemLabel_);
 
