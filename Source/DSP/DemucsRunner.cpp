@@ -59,7 +59,7 @@ void DemucsRunner::run()
                              .getChildFile("StemSep_demucs");
     tempDir.createDirectory();
 
-    const auto cmd = "python -m demucs -n htdemucs_6s -o \""
+    const auto cmd = "python -m demucs -n htdemucs_6s --float32 -o \""
                      + tempDir.getFullPathName() + "\" \""
                      + inputFile_.getFullPathName() + "\"";
 
