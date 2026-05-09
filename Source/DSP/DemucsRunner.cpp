@@ -29,10 +29,10 @@ void DemucsRunner::cancel()
 
 void DemucsRunner::run()
 {
-    // Probe — make sure demucs is importable
+    // Probe — make sure demucs is importable (import check, not --version which requires args)
     {
         juce::ChildProcess probe;
-        if (!probe.start("python -m demucs --version",
+        if (!probe.start("python -c \"import demucs\"",
                          juce::ChildProcess::wantStdErr | juce::ChildProcess::wantStdOut))
         {
             auto cb = onDone_;
