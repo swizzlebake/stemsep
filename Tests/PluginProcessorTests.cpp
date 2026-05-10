@@ -48,11 +48,22 @@ TEST_CASE("StemSepProcessor: default parameter values match instrument defaults"
 
 // ── bus layout ───────────────────────────────────────────────────────────────
 
-TEST_CASE("StemSepProcessor: has 1 input bus and 1 output bus", "[processor]")
+TEST_CASE("StemSepProcessor: has 1 input bus and 1 main + NUM_STEMS output buses", "[processor]")
 {
     StemSepProcessor p;
     CHECK(p.getBusCount(true)  == 1);
-    CHECK(p.getBusCount(false) == 1);
+    CHECK(p.getBusCount(false) == 1 + NUM_STEMS);
+}
+
+TEST_CASE("StemSepProcessor: stem output buses are enabled by default", "[processor]")
+{
+    StemSepProcessor p;
+    for (int i = 0; i < NUM_STEMS; ++i)
+    {
+        const auto* bus = p.getBus(false, i + 1);
+        REQUIRE(bus != nullptr);
+        CHECK(bus->isEnabled());
+    }
 }
 
 TEST_CASE("StemSepProcessor: main input bus is enabled and stereo", "[processor]")
@@ -93,12 +104,12 @@ TEST_CASE("StemSepProcessor: silence in gives silence out when all stems disable
         p.getAPVTS().getParameter("enable" + juce::String(i))
             ->setValueNotifyingHost(0.f);
 
-    juce::AudioBuffer<float> buffer(2, 512);
+    juce::AudioBuffer<float> buffer(p.getTotalNumOutputChannels(), 512);
     buffer.clear();
     juce::MidiBuffer midi;
     p.processBlock(buffer, midi);
 
-    for (int ch = 0; ch < 2; ++ch)
+    for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
         for (int i = 0; i < 512; ++i)
             CHECK_THAT(buffer.getSample(ch, i), Catch::Matchers::WithinAbs(0.f, 1e-6f));
 }
@@ -113,22 +124,24 @@ TEST_CASE("StemSepProcessor: single stereo input passes through enabled BPF stem
         p.getAPVTS().getParameter("enable" + juce::String(i))
             ->setValueNotifyingHost(0.f);
 
-    // Fill buffer with a 120 Hz sine (near Drums centre frequency)
-    juce::AudioBuffer<float> buffer(2, 512);
+    // Fill buffer with a 120 Hz sine on the input channels (0/1 = stereo input,
+    // shared with Main output bus). Other channels are stem outputs — leave at zero.
+    juce::AudioBuffer<float> buffer(p.getTotalNumOutputChannels(), 512);
+    buffer.clear();
     const float sr = 44100.f;
-    for (int ch = 0; ch < 2; ++ch)
-        for (int i = 0; i < 512; ++i)
-            buffer.setSample(ch, i, std::sin(2.f * 3.14159265f * 120.f * i / sr));
+    auto fillInput = [&] {
+        for (int ch = 0; ch < 2; ++ch)
+            for (int i = 0; i < 512; ++i)
+                buffer.setSample(ch, i, std::sin(2.f * 3.14159265f * 120.f * i / sr));
+    };
+    fillInput();
 
     juce::MidiBuffer midi;
     // Settle: two processBlock passes so BPF is at steady state
     p.processBlock(buffer, midi);
 
     // Re-fill input for measurement block
-    for (int ch = 0; ch < 2; ++ch)
-        for (int i = 0; i < 512; ++i)
-            buffer.setSample(ch, i, std::sin(2.f * 3.14159265f * 120.f * i / sr));
-
+    fillInput();
     p.processBlock(buffer, midi);
 
     // At 120 Hz (near BPF centre), output should be non-trivial

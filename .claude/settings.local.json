@@ -6,7 +6,10 @@
       "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\18\\\\Community\\\\Common7\\\\IDE\\\\CommonExtensions\\\\Microsoft\\\\CMake\\\\CMake\\\\bin\\\\cmake.exe\" --build Builds --config Release)",
       "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\18\\\\Community\\\\Common7\\\\IDE\\\\CommonExtensions\\\\Microsoft\\\\CMake\\\\CMake\\\\bin\\\\cmake.exe\" --build Builds --config Release --target StemSepTests)",
       "Bash(C:\\\\Users\\\\Lasse\\\\Documents\\\\StimSep\\\\Builds\\\\StemSepTests_artefacts\\\\Release\\\\StemSepTests.exe *)",
-      "Bash(\"C:\\\\Users\\\\Lasse\\\\Documents\\\\StimSep\\\\Builds\\\\StemSepTests_artefacts\\\\Release\\\\StemSepTests.exe\")"
+      "Bash(\"C:\\\\Users\\\\Lasse\\\\Documents\\\\StimSep\\\\Builds\\\\StemSepTests_artefacts\\\\Release\\\\StemSepTests.exe\")",
+      "Bash(/home/ems/RiderProjects/stemsep/build-linux.sh *)",
+      "Bash(rm ~/.config/REAPER/Scripts/StemSep_setup.lua)",
+      "Bash(ln -s /home/ems/RiderProjects/stemsep/scripts/StemSep_setup.lua ~/.config/REAPER/Scripts/StemSep_setup.lua)"
     ]
   }
 }

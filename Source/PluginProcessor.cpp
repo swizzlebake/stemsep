@@ -16,7 +16,12 @@ StemSepProcessor::StemSepProcessor()
     : AudioProcessor(
         BusesProperties()
             .withInput ("Input",  juce::AudioChannelSet::stereo(), true)
-            .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
+            .withOutput("Main",   juce::AudioChannelSet::stereo(), true)
+            .withOutput("Drums",  juce::AudioChannelSet::stereo(), true)
+            .withOutput("Bass",   juce::AudioChannelSet::stereo(), true)
+            .withOutput("Guitar", juce::AudioChannelSet::stereo(), true)
+            .withOutput("Vocals", juce::AudioChannelSet::stereo(), true)
+            .withOutput("Other",  juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "PARAMS", createParameterLayout())
 {
     formatManager_.registerBasicFormats();
@@ -73,6 +78,7 @@ void StemSepProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     for (auto& f : filters)
         f.prepare(sampleRate, samplesPerBlock);
     inputCopy_.setSize(2, samplesPerBlock, false, true, false);
+    stemScratch_.setSize(2, samplesPerBlock, false, true, false);
 }
 
 void StemSepProcessor::releaseResources()
@@ -83,8 +89,17 @@ void StemSepProcessor::releaseResources()
 
 bool StemSepProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
 {
-    return layouts.getMainOutputChannelSet() == juce::AudioChannelSet::stereo()
-        && layouts.getMainInputChannelSet()  == juce::AudioChannelSet::stereo();
+    if (layouts.getMainInputChannelSet()  != juce::AudioChannelSet::stereo()) return false;
+    if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo()) return false;
+
+    // Stem output buses (1..NUM_STEMS) must be stereo when active.
+    for (int i = 1; i < layouts.outputBuses.size(); ++i)
+    {
+        const auto& cs = layouts.outputBuses.getReference(i);
+        if (!cs.isDisabled() && cs != juce::AudioChannelSet::stereo())
+            return false;
+    }
+    return true;
 }
 
 void StemSepProcessor::processBlock(juce::AudioBuffer<float>& buffer,
@@ -93,13 +108,55 @@ void StemSepProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     juce::ScopedNoDenormals noDenormals;
     const int numSamples = buffer.getNumSamples();
 
-    auto outputBuf = getBusBuffer(buffer, false, 0);
-    float* outL = outputBuf.getWritePointer(0);
-    float* outR = outputBuf.getWritePointer(1);
+    auto mainOut = getBusBuffer(buffer, false, 0);
+    float* mainL = mainOut.getNumChannels() > 0 ? mainOut.getWritePointer(0) : nullptr;
+    float* mainR = mainOut.getNumChannels() > 1 ? mainOut.getWritePointer(1) : nullptr;
+
+    // Stem bus pointers (nullptr when host has not activated that bus)
+    float* stemL[NUM_STEMS] = {};
+    float* stemR[NUM_STEMS] = {};
+    for (int i = 0; i < NUM_STEMS; ++i)
+    {
+        const int busIdx = i + 1;
+        if (busIdx < getBusCount(false))
+        {
+            auto bus = getBusBuffer(buffer, false, busIdx);
+            if (bus.getNumChannels() >= 2)
+            {
+                stemL[i] = bus.getWritePointer(0);
+                stemR[i] = bus.getWritePointer(1);
+            }
+        }
+    }
+
+    const Mode currentMode  = mode_.load(std::memory_order_acquire);
+    const bool demucsReady  = separatedAudioReady_.load(std::memory_order_acquire);
+    const bool bpfMode      = !(currentMode == Mode::Demucs && demucsReady);
+
+    // BPF mode reads from the input bus, which may share memory with the main output
+    // bus in in-place mode — copy *before* clearing the output.
+    const float* inL = nullptr;
+    const float* inR = nullptr;
+    if (bpfMode)
+    {
+        auto inputBuf = getBusBuffer(buffer, true, 0);
+        inputCopy_.setSize(2, numSamples, false, false, true);
+        inputCopy_.copyFrom(0, 0, inputBuf, 0, 0, numSamples);
+        if (inputBuf.getNumChannels() > 1)
+            inputCopy_.copyFrom(1, 0, inputBuf, 1, 0, numSamples);
+        else
+            inputCopy_.copyFrom(1, 0, inputBuf, 0, 0, numSamples);
+        inL = inputCopy_.getReadPointer(0);
+        inR = inputCopy_.getReadPointer(1);
+    }
+
+    // Clear all output buses we may write into.
+    mainOut.clear();
+    for (int i = 0; i < NUM_STEMS; ++i)
+        if (stemL[i] != nullptr) { std::fill_n(stemL[i], numSamples, 0.f); std::fill_n(stemR[i], numSamples, 0.f); }
 
     // Demucs playback mode
-    if (mode_.load(std::memory_order_acquire) == Mode::Demucs
-        && separatedAudioReady_.load(std::memory_order_acquire))
+    if (!bpfMode)
     {
         int64_t startSample = 0;
         if (auto* ph = getPlayHead())
@@ -107,7 +164,6 @@ void StemSepProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                 if (auto t = pos->getTimeInSamples())
                     startSample = *t;
 
-        outputBuf.clear();
         for (int i = 0; i < NUM_STEMS; ++i)
         {
             if (enableParams[i]->load() < 0.5f)
@@ -121,26 +177,21 @@ void StemSepProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             {
                 const int64_t idx = startSample + n;
                 if (idx < 0 || idx >= stemLen) continue;
-                outL[n] += stem.getSample(0, (int)idx) * gainLin;
-                outR[n] += stem.getSample(stem.getNumChannels() > 1 ? 1 : 0, (int)idx) * gainLin;
+                const float l = stem.getSample(0, (int)idx) * gainLin;
+                const float r = stem.getSample(stem.getNumChannels() > 1 ? 1 : 0, (int)idx) * gainLin;
+                if (mainL) mainL[n] += l;
+                if (mainR) mainR[n] += r;
+                if (stemL[i]) stemL[i][n] = l;
+                if (stemR[i]) stemR[i][n] = r;
             }
         }
         return;
     }
 
     // BPF mode
-    // Copy input before clearing output — they share the same channels in in-place mode.
-    auto inputBuf = getBusBuffer(buffer, true, 0);
-    inputCopy_.setSize(2, numSamples, false, false, true);
-    inputCopy_.copyFrom(0, 0, inputBuf, 0, 0, numSamples);
-    if (inputBuf.getNumChannels() > 1)
-        inputCopy_.copyFrom(1, 0, inputBuf, 1, 0, numSamples);
-    else
-        inputCopy_.copyFrom(1, 0, inputBuf, 0, 0, numSamples);
-    const float* inL = inputCopy_.getReadPointer(0);
-    const float* inR = inputCopy_.getReadPointer(1);
-
-    outputBuf.clear();
+    stemScratch_.setSize(2, numSamples, false, false, true);
+    float* tmpL = stemScratch_.getWritePointer(0);
+    float* tmpR = stemScratch_.getWritePointer(1);
 
     for (int i = 0; i < NUM_STEMS; ++i)
     {
@@ -152,7 +203,18 @@ void StemSepProcessor::processBlock(juce::AudioBuffer<float>& buffer,
             qParams[i]->load(),
             gainParams[i]->load());
 
-        filters[i].processBlock(inL, inR, outL, outR, numSamples);
+        std::fill_n(tmpL, numSamples, 0.f);
+        std::fill_n(tmpR, numSamples, 0.f);
+        filters[i].processBlock(inL, inR, tmpL, tmpR, numSamples);
+
+        for (int n = 0; n < numSamples; ++n)
+        {
+            if (mainL) mainL[n] += tmpL[n];
+            if (mainR) mainR[n] += tmpR[n];
+        }
+
+        if (stemL[i]) std::copy_n(tmpL, numSamples, stemL[i]);
+        if (stemR[i]) std::copy_n(tmpR, numSamples, stemR[i]);
     }
 }
 

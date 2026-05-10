@@ -26,6 +26,10 @@ SeparationPanel::SeparationPanel(StemSepProcessor& processor)
     separateButton_.setEnabled(false);
     addAndMakeVisible(separateButton_);
 
+    saveCopyToggle_.setColour(juce::ToggleButton::textColourId, juce::Colours::white.withAlpha(0.7f));
+    saveCopyToggle_.setTooltip("After separation, copy WAV stems into <source>_stems/ next to the input file.");
+    addAndMakeVisible(saveCopyToggle_);
+
     progressBar_.setVisible(false);
     addAndMakeVisible(progressBar_);
 
@@ -63,11 +67,13 @@ void SeparationPanel::resized()
     top.removeFromLeft(8);
     statusLabel_ .setBounds(top);
 
-    filePathLabel_ .setBounds(bot.removeFromLeft(280));
+    filePathLabel_ .setBounds(bot.removeFromLeft(220));
     bot.removeFromLeft(4);
     browseButton_  .setBounds(bot.removeFromLeft(72));
     bot.removeFromLeft(4);
     separateButton_.setBounds(bot.removeFromLeft(80));
+    bot.removeFromLeft(8);
+    saveCopyToggle_.setBounds(bot.removeFromLeft(180));
     bot.removeFromLeft(8);
     progressBar_   .setBounds(bot);
 }
@@ -127,7 +133,22 @@ void SeparationPanel::startSeparation()
 
             if (result.success)
             {
-                safeThis->statusLabel_.setText("Done", juce::dontSendNotification);
+                if (safeThis->saveCopyToggle_.getToggleState())
+                {
+                    const auto destDir = safeThis->selectedFile_.getParentDirectory()
+                        .getChildFile(safeThis->selectedFile_.getFileNameWithoutExtension() + "_stems");
+                    destDir.createDirectory();
+                    juce::Array<juce::File> wavs;
+                    result.outputFolder.findChildFiles(wavs, juce::File::findFiles, false, "*.wav");
+                    for (const auto& f : wavs)
+                        f.copyFileTo(destDir.getChildFile(f.getFileName()));
+                    safeThis->statusLabel_.setText("Done — saved to " + destDir.getFileName(),
+                                                    juce::dontSendNotification);
+                }
+                else
+                {
+                    safeThis->statusLabel_.setText("Done", juce::dontSendNotification);
+                }
                 if (safeThis->onSeparationComplete)
                     safeThis->onSeparationComplete(result.outputFolder);
                 if (safeThis->onModeChanged)

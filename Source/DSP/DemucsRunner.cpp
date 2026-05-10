@@ -38,6 +38,20 @@ for name, source in zip(model.sources, sources):
              source.T.cpu().numpy(), model.samplerate, subtype='FLOAT')
 )python";
 
+static juce::String findPython()
+{
+    for (const char* candidate : { "python3", "python" })
+    {
+        juce::ChildProcess p;
+        const juce::StringArray args { candidate, "--version" };
+        if (p.start(args, juce::ChildProcess::wantStdErr | juce::ChildProcess::wantStdOut)
+            && p.waitForProcessToFinish(3000)
+            && p.getExitCode() == 0)
+            return candidate;
+    }
+    return {};
+}
+
 DemucsRunner::DemucsRunner()
     : juce::Thread("DemucsRunner")
 {
@@ -67,10 +81,21 @@ void DemucsRunner::cancel()
 
 void DemucsRunner::run()
 {
+    if (pythonExe_.isEmpty()) pythonExe_ = findPython();
+    if (pythonExe_.isEmpty())
+    {
+        auto cb = onDone_;
+        juce::MessageManager::callAsync([cb]() {
+            cb({ false, {}, "Python not found. Install python3 (Linux) or add python to PATH (Windows)." });
+        });
+        return;
+    }
+
     // Probe — make sure demucs + soundfile are importable
     {
         juce::ChildProcess probe;
-        if (!probe.start("python -c \"import demucs, soundfile\"",
+        const juce::StringArray probeArgs { pythonExe_, "-c", "import demucs, soundfile" };
+        if (!probe.start(probeArgs,
                          juce::ChildProcess::wantStdErr | juce::ChildProcess::wantStdOut))
         {
             auto cb = onDone_;
@@ -101,9 +126,13 @@ void DemucsRunner::run()
     const auto scriptFile = tempDir.getChildFile("stemsep_separate.py");
     scriptFile.replaceWithText(kSeparateScript);
 
-    const auto cmd = "python \"" + scriptFile.getFullPathName() + "\" \""
-                     + inputFile_.getFullPathName() + "\" \""
-                     + tempDir.getFullPathName() + "\" htdemucs_6s";
+    const juce::StringArray cmd {
+        pythonExe_,
+        scriptFile.getFullPathName(),
+        inputFile_.getFullPathName(),
+        tempDir.getFullPathName(),
+        "htdemucs_6s"
+    };
 
     juce::ChildProcess proc;
     if (!proc.start(cmd, juce::ChildProcess::wantStdErr | juce::ChildProcess::wantStdOut))

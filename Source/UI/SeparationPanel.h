@@ -29,6 +29,7 @@ private:
     juce::Label      filePathLabel_;
     juce::TextButton browseButton_   { "Browse\xe2\x80\xa6" };
     juce::TextButton separateButton_ { "Separate" };
+    juce::ToggleButton saveCopyToggle_ { "Save copy next to source" };
 
     double progressValue_ = 0.0;
     juce::ProgressBar progressBar_ { progressValue_ };

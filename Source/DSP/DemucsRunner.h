@@ -28,6 +28,7 @@ private:
     juce::File     inputFile_;
     ProgressFn     onProgress_;
     CompletionFn   onDone_;
+    juce::String   pythonExe_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(DemucsRunner)
 };

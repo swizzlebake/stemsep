@@ -63,6 +63,9 @@ private:
     // BPF mode: pre-allocated input copy (in/out share channels in in-place mode)
     juce::AudioBuffer<float> inputCopy_;
 
+    // Per-stem scratch — used when writing to stem output buses
+    juce::AudioBuffer<float> stemScratch_;
+
     // Demucs mode
     std::array<juce::AudioBuffer<float>, NUM_STEMS> separatedStems_;
     std::atomic<bool>    separatedAudioReady_{ false };
