@@ -1,5 +1,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "UI/Formatters.h"
+#include "DSP/Tunings.h"
 #include <cmath>
 
 static const char* kStemNames[NUM_STEMS] = {
@@ -41,6 +43,20 @@ StemSepProcessor::createParameterLayout()
 {
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
 
+    using FloatAttrs = juce::AudioParameterFloatAttributes;
+
+    const auto freqAttrs = FloatAttrs()
+        .withStringFromValueFunction([](float v, int) { return stemsep::formatFreq(v); })
+        .withValueFromStringFunction([](const juce::String& s) { return (float)stemsep::parseFreq(s); });
+
+    const auto qAttrs = FloatAttrs()
+        .withStringFromValueFunction([](float v, int) { return stemsep::formatQ(v); })
+        .withValueFromStringFunction([](const juce::String& s) { return s.getFloatValue(); });
+
+    const auto gainAttrs = FloatAttrs()
+        .withStringFromValueFunction([](float v, int) { return stemsep::formatGain(v); })
+        .withValueFromStringFunction([](const juce::String& s) { return (float)stemsep::parseGain(s); });
+
     for (int i = 0; i < NUM_STEMS; ++i)
     {
         const auto id   = juce::String(i);
@@ -50,25 +66,43 @@ StemSepProcessor::createParameterLayout()
             juce::ParameterID{"freq" + id, 1},
             name + " Freq",
             juce::NormalisableRange<float>(20.f, 20000.f, 0.f, 0.25f),
-            kDefaultFreq[i]));
+            kDefaultFreq[i],
+            freqAttrs));
 
         layout.add(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID{"q" + id, 1},
             name + " Q",
             juce::NormalisableRange<float>(0.1f, 10.f, 0.f, 0.5f),
-            kDefaultQ[i]));
+            kDefaultQ[i],
+            qAttrs));
 
         layout.add(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID{"gain" + id, 1},
             name + " Level",
             juce::NormalisableRange<float>(-48.f, 24.f),
-            0.f));
+            0.f,
+            gainAttrs));
 
         layout.add(std::make_unique<juce::AudioParameterBool>(
             juce::ParameterID{"enable" + id, 1},
             name + " Enable",
             true));
     }
+
+    // Per-stem instrument tunings (bass = stem 1, guitar = stem 2).
+    auto buildChoices = [](const std::vector<stemsep::TuningPreset>& presets) {
+        juce::StringArray choices;
+        for (const auto& p : presets) choices.add(p.label);
+        choices.add("Custom\xe2\x80\xa6");
+        return choices;
+    };
+
+    layout.add(std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID{"tuning1", 1}, "Bass Tuning",
+        buildChoices(stemsep::bassPresets()), 0));
+    layout.add(std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID{"tuning2", 1}, "Guitar Tuning",
+        buildChoices(stemsep::guitarPresets()), 0));
 
     return layout;
 }
@@ -262,6 +296,9 @@ void StemSepProcessor::loadSeparatedStems(const juce::File& folder)
     }
 
     separatedAudioReady_.store(true, std::memory_order_release);
+
+    if (onSeparatedStemsLoaded)
+        juce::MessageManager::callAsync(onSeparatedStemsLoaded);
 }
 
 void StemSepProcessor::getStateInformation(juce::MemoryBlock& dest)
@@ -304,6 +341,55 @@ void StemSepProcessor::getMagnitudeResponses(
         for (size_t i = 0; i < freqPoints.size(); ++i)
             outMagnitudes[s][i] = filters[s].getMagnitudeForFrequency(freqPoints[i], sr);
     }
+}
+
+std::vector<int> StemSepProcessor::getTuningMidi(int stemIndex) const
+{
+    if (stemIndex != 1 && stemIndex != 2) return {};
+
+    const auto& presets = (stemIndex == 1) ? stemsep::bassPresets()
+                                            : stemsep::guitarPresets();
+    const juce::String paramId = (stemIndex == 1) ? "tuning1" : "tuning2";
+    const int total = (int)presets.size() + 1; // + Custom
+
+    int idx = 0;
+    if (auto* p = apvts.getParameter(paramId))
+        idx = juce::jlimit(0, total - 1,
+                           (int)std::round(p->convertFrom0to1(p->getValue())));
+
+    if (idx < (int)presets.size())
+        return presets[(size_t)idx].midi;
+
+    const auto custom = getCustomTuningText(stemIndex);
+    const int strings = (stemIndex == 1) ? 4 : 6;
+    const int defaultOct = (stemIndex == 1) ? 1 : 2;
+    auto parsed = stemsep::parseCustomTuning(custom, strings, defaultOct);
+    if (! parsed.empty()) return parsed;
+
+    return presets.front().midi; // fallback
+}
+
+juce::String StemSepProcessor::getCustomTuningText(int stemIndex) const
+{
+    const juce::Identifier id { stemIndex == 1 ? "bassCustomTuning"
+                                                : "guitarCustomTuning" };
+    return apvts.state.getProperty(id, juce::String()).toString();
+}
+
+void StemSepProcessor::setCustomTuningText(int stemIndex, const juce::String& text)
+{
+    const juce::Identifier id { stemIndex == 1 ? "bassCustomTuning"
+                                                : "guitarCustomTuning" };
+    apvts.state.setProperty(id, text, nullptr);
+}
+
+double StemSepProcessor::getHostBpm()
+{
+    if (auto* ph = getPlayHead())
+        if (auto pos = ph->getPosition())
+            if (auto bpm = pos->getBpm())
+                return *bpm;
+    return 0.0;
 }
 
 void StemSepProcessor::refreshCoefficients()

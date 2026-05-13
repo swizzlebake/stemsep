@@ -49,6 +49,19 @@ public:
     bool hasSeparatedAudio() const      { return separatedAudioReady_.load(std::memory_order_acquire); }
     void loadSeparatedStems(const juce::File& demucsOutputFolder);
 
+    juce::File getSeparatedSourceFolder() const { return juce::File(separatedSourcePath_); }
+
+    // Returns the host's current BPM, or 0.0 if unavailable. Message-thread safe.
+    double getHostBpm();
+
+    // Tuning helpers — stemIndex must be 1 (bass) or 2 (guitar).
+    std::vector<int> getTuningMidi(int stemIndex) const;
+    juce::String     getCustomTuningText(int stemIndex) const;
+    void             setCustomTuningText(int stemIndex, const juce::String& text);
+
+    // Fired on the message thread when loadSeparatedStems completes.
+    std::function<void()> onSeparatedStemsLoaded;
+
 private:
     juce::AudioProcessorValueTreeState apvts;
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
