@@ -237,20 +237,23 @@ void DemucsRunner::run()
         return;
     }
 
-    // Locate output: <tempDir>/htdemucs_6s/<trackname>/
-    const auto modelDir = tempDir.getChildFile("htdemucs_6s");
-    juce::Array<juce::File> subdirs;
-    modelDir.findChildFiles(subdirs, juce::File::findDirectories, false);
-    if (subdirs.isEmpty())
+    // Output goes to <tempDir>/htdemucs_6s/<trackname>/, where the script computes
+    // trackname = os.path.splitext(os.path.basename(input_file))[0]. Mirror that
+    // exactly here — scanning the directory and picking the first entry returns
+    // a stale subfolder from an earlier separation once more than one track has
+    // ever been processed in this session.
+    const auto outputFolder = tempDir.getChildFile("htdemucs_6s")
+                                     .getChildFile(inputFile_.getFileNameWithoutExtension());
+    if (! outputFolder.isDirectory() || ! outputFolder.getChildFile("drums.wav").existsAsFile())
     {
         auto cb = onDone_;
-        juce::MessageManager::callAsync([cb]() {
-            cb({ false, {}, "Demucs output folder not found" });
+        const auto where = outputFolder.getFullPathName();
+        juce::MessageManager::callAsync([cb, where]() {
+            cb({ false, {}, "Demucs output folder not found at " + where });
         });
         return;
     }
 
-    const auto outputFolder = subdirs.getFirst();
     auto cb = onDone_;
     juce::MessageManager::callAsync([cb, outputFolder]() {
         cb({ true, outputFolder, {} });
