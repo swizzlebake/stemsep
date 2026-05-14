@@ -110,7 +110,14 @@ void DemucsRunner::run()
             const auto err = probe.readAllProcessOutput();
             auto cb = onDone_;
             juce::MessageManager::callAsync([cb, err]() {
-                cb({ false, {}, "Demucs not found. Install with: pip install demucs\n" + err });
+               #if JUCE_WINDOWS
+                const auto hint = juce::String(
+                    "Demucs not found. Install with:  py -m pip install demucs soundfile julius");
+               #else
+                const auto hint = juce::String(
+                    "Demucs not found. Install with: ~/.venvs/stemsep/bin/pip install demucs soundfile julius");
+               #endif
+                cb({ false, {}, hint + "\n" + err });
             });
             return;
         }

@@ -31,7 +31,9 @@ target_sources(StemSep PRIVATE
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
     Source/DSP/BandFilter.cpp
+    Source/DSP/CaptureRunner.cpp
     Source/DSP/DemucsRunner.cpp
+    Source/DSP/TabRunner.cpp
     Source/UI/FrequencyDisplay.cpp
     Source/UI/StemStrip.cpp
     Source/UI/SeparationPanel.cpp
@@ -76,7 +78,9 @@ target_sources(StemSepTests PRIVATE
     Tests/BandFilterTests.cpp
     Tests/PluginProcessorTests.cpp
     Source/DSP/BandFilter.cpp
+    Source/DSP/CaptureRunner.cpp
     Source/DSP/DemucsRunner.cpp
+    Source/DSP/TabRunner.cpp
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
     Source/UI/FrequencyDisplay.cpp

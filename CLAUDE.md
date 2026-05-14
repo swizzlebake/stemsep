@@ -23,6 +23,19 @@ robocopy "Builds\StemSep_artefacts\Release\VST3\StemSep.vst3" "C:\Program Files\
 
 Then rescan plugins in Ableton Live 12 Suite.
 
+**Python runtime for Separate / Tab generation** — install Python 3.10+ from python.org or the Microsoft Store and tick *Add python.exe to PATH* during install. Then from a regular `cmd.exe`:
+
+```bat
+py -m pip install --upgrade pip
+py -m pip install demucs soundfile julius
+py -m pip install librosa             rem monophonic Tab generation
+py -m pip install basic-pitch         rem polyphonic Tab generation (~500MB incl. TF Lite)
+```
+
+The plugin spawns `python` from the DAW's `PATH`. If Ableton was launched before Python was installed, restart Ableton so it picks up the updated `PATH`. There is no per-project venv on Windows — the `py` launcher resolves the registered interpreter.
+
+**System-audio capture on Windows** — works out of the box via WASAPI loopback on the *default render endpoint*. No driver install, no Stereo Mix, no ffmpeg. The recorded WAV is written as 32-bit float at the device's mix rate (typically 48 kHz) to `%USERPROFILE%\Music\StemSep_captures\`. To change which device is captured, change the default playback device in Sound Settings before clicking Capture.
+
 ### Linux (Reaper)
 
 Prerequisites (Ubuntu/Debian):
@@ -34,7 +47,8 @@ sudo apt install build-essential pkg-config cmake ninja-build python3-venv \
     libfreetype-dev libfontconfig1-dev \
     libx11-dev libxext-dev libxrender-dev libxcomposite-dev \
     libxcursor-dev libxinerama-dev libxrandr-dev \
-    libglu1-mesa-dev mesa-common-dev
+    libglu1-mesa-dev mesa-common-dev \
+    ffmpeg pulseaudio-utils
 ```
 
 Demucs runtime — install into a venv (Ubuntu 24.04+ blocks `pip install --user` system-wide due to PEP 668):
@@ -43,6 +57,15 @@ python3 -m venv ~/.venvs/stemsep
 ~/.venvs/stemsep/bin/pip install --upgrade pip
 ~/.venvs/stemsep/bin/pip install demucs soundfile julius
 ```
+
+For the **Tab generation** feature (per-stem ASCII tab from Bass / Guitar):
+
+```bash
+~/.venvs/stemsep/bin/pip install librosa             # monophonic tab (pYIN)
+~/.venvs/stemsep/bin/pip install basic-pitch         # polyphonic tab — optional, ~500MB incl. TF Lite
+```
+
+If `basic-pitch` is missing, the plugin surfaces a clear error pointing back to this command when the user picks the polyphonic mode. Monophonic mode only requires `librosa`.
 
 The plugin spawns `python3` from `PATH`, so Reaper must be launched with the venv's `bin/` on `PATH` for separation to work. Use `./run-reaper.sh` (described below under **Run**) — it handles this automatically.
 
@@ -291,6 +314,20 @@ Demucs mode (per stem i, sample n):
 ### Parameter layout
 
 `NUM_STEMS = 5` drives the entire parameter set. IDs are indexed: `freq0`–`freq4`, `q0`–`q4`, `gain0`–`gain4`, `enable0`–`enable4`. Cached as `std::atomic<float>*` arrays for lock-free audio-thread reads.
+
+### Capture from system audio
+
+The Separation panel exposes a **Capture** button alongside *Browse*. Output goes to `~/Music/StemSep_captures/capture-YYYY-MM-DD-HHMMSS.wav` (or `%USERPROFILE%\Music\StemSep_captures\…` on Windows). The resulting file is loaded as `selectedFile_` and runs through the same Demucs path as a browsed file — so multi-bus routing, the "Save copy" toggle, and tab generation all work unchanged.
+
+Use case: separating tracks you can play locally but can't download (Spotify, Apple Music, streamed YouTube). Capture is real-time — a 4-minute song takes 4 minutes to record.
+
+`CaptureRunner` (subclass of `juce::Thread`) has two backends, picked at compile time:
+
+- **Linux** — spawns `ffmpeg -f pulse -i <sink>.monitor` to record the PulseAudio/PipeWire default sink monitor. Stop sends `SIGINT` (via a pid file written by a `sh -c` wrapper around `exec ffmpeg`) so ffmpeg flushes the WAV's RIFF size fields. Runtime deps: `ffmpeg` and `pactl` (from `pulseaudio-utils`). Writes 16-bit PCM stereo at 48 kHz.
+
+- **Windows** — opens the default render endpoint via WASAPI (`IMMDeviceEnumerator::GetDefaultAudioEndpoint(eRender)` → `IAudioClient::Initialize(..., AUDCLNT_STREAMFLAGS_LOOPBACK, ...)` → `IAudioCaptureClient::GetBuffer`) and writes WAV directly with `juce::WavAudioFormat`. The endpoint's mix format is detected via `WAVE_FORMAT_EXTENSIBLE` + `KSDATAFORMAT_SUBTYPE_IEEE_FLOAT`; PCM 16-/32-bit fallbacks are also handled, anything else is rejected with a clear error. Output is 32-bit float WAV at the device's native rate (typically 48 kHz). No external tools and no Stereo Mix / VB-Cable required. CoInitializeEx is called per-thread with `COINIT_MULTITHREADED`; if the host has already initialised COM in STA mode we get `RPC_E_CHANGED_MODE` and skip the matching `CoUninitialize`.
+
+Neither backend needs Python/venv — that's only on the Separate path.
 
 ### DSP — `BandFilter`
 

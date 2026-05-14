@@ -291,9 +291,16 @@ void TabRunner::run()
         if (probe.getExitCode() != 0)
         {
             const auto err = probe.readAllProcessOutput();
-            const juce::String hint = (mode_ == Mode::Mono)
-                ? "Install with: ~/.venvs/stemsep/bin/pip install librosa soundfile"
-                : "Install with: ~/.venvs/stemsep/bin/pip install basic-pitch librosa soundfile";
+            const juce::String pkgs = (mode_ == Mode::Mono)
+                ? "librosa soundfile"
+                : "basic-pitch librosa soundfile";
+           #if JUCE_WINDOWS
+            const juce::String hint =
+                "Install in the Python on PATH:  py -m pip install " + pkgs;
+           #else
+            const juce::String hint =
+                "Install with: ~/.venvs/stemsep/bin/pip install " + pkgs;
+           #endif
             failAsync("Required Python packages missing.\n" + hint + "\n" + err);
             return;
         }

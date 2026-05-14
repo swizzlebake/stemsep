@@ -9,7 +9,30 @@
       "Bash(\"C:\\\\Users\\\\Lasse\\\\Documents\\\\StimSep\\\\Builds\\\\StemSepTests_artefacts\\\\Release\\\\StemSepTests.exe\")",
       "Bash(/home/ems/RiderProjects/stemsep/build-linux.sh *)",
       "Bash(rm ~/.config/REAPER/Scripts/StemSep_setup.lua)",
-      "Bash(ln -s /home/ems/RiderProjects/stemsep/scripts/StemSep_setup.lua ~/.config/REAPER/Scripts/StemSep_setup.lua)"
+      "Bash(ln -s /home/ems/RiderProjects/stemsep/scripts/StemSep_setup.lua ~/.config/REAPER/Scripts/StemSep_setup.lua)",
+      "Bash(cmake --build Builds --target StemSepTests)",
+      "Bash(Builds/StemSepTests_artefacts/Release/StemSepTests)",
+      "Bash(cmake --build Builds)",
+      "Bash(~/.venvs/stemsep/bin/pip install *)",
+      "Bash(lsb_release -a)",
+      "Bash(apt-cache madison *)",
+      "Bash(curl -LsSf https://astral.sh/uv/install.sh)",
+      "Bash(sh)",
+      "Bash(~/.local/bin/uv python *)",
+      "Bash(rm -rf ~/.venvs/stemsep)",
+      "Bash(~/.local/bin/uv venv *)",
+      "Bash(~/.venvs/stemsep/bin/python -m ensurepip --upgrade)",
+      "Bash(ln -s pip3 ~/.venvs/stemsep/bin/pip)",
+      "Bash(~/.venvs/stemsep/bin/pip --version)",
+      "Bash(~/.venvs/stemsep/bin/python -c \"import basic_pitch, librosa, soundfile, numpy, demucs; from basic_pitch.inference import predict; print\\('all imports ok'\\)\")",
+      "Read(//tmp/StemSep_tab/**)",
+      "Read(//tmp/**)",
+      "Bash(coredumpctl list *)",
+      "Bash(coredumpctl info *)",
+      "Bash(coredumpctl debug *)",
+      "Bash(python3 *)",
+      "Bash(./build-linux.sh)",
+      "Bash(git check-ignore *)"
     ]
   }
 }
